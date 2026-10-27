@@ -197,7 +197,7 @@ Panel {
         anchorItem: button; owner: root; bar: root.bar; open: root.opened
         focusTarget: catcher
         contentWidth: fittedContentWidth(Style.space(520))
-        contentHeight: fittedContentHeight(Style.space(root.settingsOpen ? 620 : Math.min(620, 150 + (root.trackingOpen ? 50 : 0) + root.filtered.length * 117)), Style.space(690))
+        contentHeight: fittedContentHeight(Style.space(root.settingsOpen ? 620 : Math.max(500, Math.min(620, 150 + (root.trackingOpen ? 50 : 0) + root.filtered.length * 117))), Style.space(690))
         FocusScope {
             id: catcher
             anchors.fill: parent
@@ -213,17 +213,29 @@ Panel {
             ColumnLayout {
                 id: popupColumn
                 anchors.fill: parent; spacing: Style.space(9)
-                RowLayout {
+                Item {
                     Layout.fillWidth: true
+                    implicitHeight: Math.max(headerLabels.implicitHeight, headerActions.implicitHeight)
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 0
+                        id: headerLabels
+                        anchors.left: parent.left
+                        anchors.right: headerActions.left
+                        anchors.rightMargin: Style.space(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 0
                         Label { text: root.settingsOpen ? root.settingsTitle : "Gitful"; font.bold: true; font.pixelSize: Style.space(20); elide: Text.ElideRight }
                         Label { visible: !root.settingsOpen; text: root.repositories.length + " repositories · " + root.incoming + " incoming"; color: root.muted; font.pixelSize: Style.space(10) }
                     }
-                    ActionButton { visible: root.settingsOpen; text: "Back"; onClicked: root.settingsOpen = false }
-                    ActionButton { visible: root.settingsOpen; text: "Save"; enabled: !root.busy; onClicked: settingsForm.save() }
-                    ActionButton { visible: !root.settingsOpen; text: "Track repository"; iconText: "󰐕"; selected: root.trackingOpen; onClicked: { root.trackingOpen = !root.trackingOpen; if (root.trackingOpen) addPath.forceActiveFocus(); } }
-                    ActionButton { visible: !root.settingsOpen; iconText: "󰒓"; tooltipText: "Settings"; Accessible.name: "Settings"; onClicked: root.showSettings(null) }
+                    RowLayout {
+                        id: headerActions
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Style.space(8)
+                        ActionButton { visible: root.settingsOpen; text: "Back"; onClicked: root.settingsOpen = false }
+                        ActionButton { visible: root.settingsOpen; text: "Save"; enabled: !root.busy; onClicked: settingsForm.save() }
+                        ActionButton { visible: !root.settingsOpen; text: "Track repository"; iconText: "󰐕"; selected: root.trackingOpen; onClicked: { root.trackingOpen = !root.trackingOpen; if (root.trackingOpen) addPath.forceActiveFocus(); } }
+                        ActionButton { visible: !root.settingsOpen; iconText: "󰒓"; tooltipText: "Settings"; Accessible.name: "Settings"; onClicked: root.showSettings(null) }
+                    }
                 }
                 Rectangle {
                     visible: !root.settingsOpen
@@ -398,6 +410,7 @@ Panel {
                 }
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.topMargin: Style.space(8)
                     spacing: Style.space(5)
                     Label { text: "●"; color: root.hasError ? Color.urgent : root.incoming ? Color.accent : root.cleanColor; font.pixelSize: Style.space(10) }
                     Label {
