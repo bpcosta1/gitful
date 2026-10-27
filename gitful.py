@@ -18,7 +18,7 @@ import time
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_CONFIG = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'gitpulse' / 'config.json'
+DEFAULT_CONFIG = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'gitful' / 'config.json'
 
 
 def git(path, *args, timeout=10):
@@ -124,8 +124,8 @@ def move_repository(config, path, placement, target):
 
 
 FETCH_INTERVAL = 300
-PLUGIN_ID = 'bpc0sta.gitpulse'
-STATE_HOME = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'gitpulse'
+PLUGIN_ID = 'bpc0sta.gitful'
+STATE_HOME = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'gitful'
 WORK_HOURS = {'enabled': False, 'start': '09:00', 'end': '18:00', 'weekdays': [0, 1, 2, 3, 4]}
 
 
@@ -399,12 +399,12 @@ def pull_repo(path):
 def install():
     destination = DEFAULT_CONFIG.parent.parent / 'omarchy/plugins' / PLUGIN_ID
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ('manifest.json', 'Widget.qml', 'SettingsForm.qml', 'gitpulse.py', 'gitful', 'gitpulse'):
+    for name in ('manifest.json', 'Widget.qml', 'SettingsForm.qml', 'gitful.py', 'gitful'):
         if (ROOT / name).resolve() != (destination / name).resolve():
             shutil.copy2(ROOT / name, destination / name)
     shell_config = DEFAULT_CONFIG.parent.parent / 'omarchy/shell.json'
     if shell_config.exists():
-        shutil.copy2(shell_config, shell_config.with_name('shell.json.gitpulse-backup-' + str(time.time_ns())))
+        shutil.copy2(shell_config, shell_config.with_name('shell.json.gitful-backup-' + str(time.time_ns())))
     subprocess.run(['omarchy-shell', 'shell', 'rescanPlugins'], check=True)
     subprocess.run(['omarchy', 'plugin', 'enable', PLUGIN_ID], check=True)
     print('Installed Gitful in the Omarchy bar.')

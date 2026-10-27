@@ -8,8 +8,6 @@ Keep your repositories within reach. See changes, unpushed commits, incoming upd
 | --- | --- |
 | <img src="docs/images/gitful-panel.png" width="360" alt="Gitful repository menu with Git status and launch actions"> | <img src="docs/images/gitful-settings.png" width="360" alt="Gitful settings for notifications, fetch intervals, work hours, and preferred applications"> |
 
-Previously called GitPulse. The plugin ID (`bpc0sta.gitpulse`) and config/state paths retain `gitpulse` for compatibility. Use `./gitful` for the CLI; `./gitpulse` remains supported.
-
 ## Install
 
 Gitful requires **Omarchy with its Quickshell shell and plugin API**, an active graphical shell session, Python 3.10+, Git, and `notify-send` (provided by `libnotify`). This plugin uses Omarchy's UI components and is not a standalone Quickshell configuration. No Python packages or virtual environment are needed.
@@ -26,12 +24,12 @@ Install from a terminal in your Omarchy session:
 omarchy plugin add https://github.com/bpcosta1/gitful.git --enable
 ```
 
-Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitpulse`; the default section is the right side of the bar. Click the Git icon, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
+Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitful`; the default section is the right side of the bar. Click the Git icon, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
 
 The enabled widget loads automatically when the shell starts. No separate service or autostart entry is needed. To enable it later:
 
 ```sh
-omarchy plugin enable bpc0sta.gitpulse --section right
+omarchy plugin enable bpc0sta.gitful --section right
 ```
 
 ### Install from a source checkout
@@ -47,7 +45,7 @@ cd ~/dev/gitful
 ./gitful open
 ```
 
-The source installer copies the plugin into `~/.config/omarchy/plugins/bpc0sta.gitpulse`, backs up `shell.json`, and enables the widget in the right bar section. Run it from the checkout after each source update.
+The source installer copies the plugin into `~/.config/omarchy/plugins/bpc0sta.gitful`, backs up `shell.json`, and enables the widget in the right bar section. Run it from the checkout after each source update.
 
 ## Use
 
@@ -106,7 +104,7 @@ Network or authentication failures retain locally known counts and display a fet
 For an installation managed by `omarchy plugin add`:
 
 ```sh
-omarchy plugin update bpc0sta.gitpulse
+omarchy plugin update bpc0sta.gitful
 ```
 
 For an installation copied from a source checkout:
@@ -122,15 +120,15 @@ If Quickshell retains the previous menu after updating, run `omarchy restart she
 Disable or remove the widget with:
 
 ```sh
-omarchy plugin disable bpc0sta.gitpulse
-omarchy plugin remove bpc0sta.gitpulse
+omarchy plugin disable bpc0sta.gitful
+omarchy plugin remove bpc0sta.gitful
 ```
 
 Disabling stops background monitoring. Removing the plugin leaves tracked repositories and Gitful's configuration/state outside the plugin directory intact.
 
 ## Command-line use
 
-Run these commands from your source checkout, or from `~/.config/omarchy/plugins/bpc0sta.gitpulse` when installed with `omarchy plugin add`:
+Run these commands from your source checkout, or from `~/.config/omarchy/plugins/bpc0sta.gitful` when installed with `omarchy plugin add`:
 
 ```sh
 ./gitful add ~/dev/my-project
@@ -154,7 +152,7 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 
 ## Configuration
 
-`~/.config/gitpulse/config.json` (or `$XDG_CONFIG_HOME/gitpulse/config.json`):
+`~/.config/gitful/config.json` (or `$XDG_CONFIG_HOME/gitful/config.json`):
 
 ```json
 {
@@ -181,7 +179,7 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 
 `fetch_interval` is seconds (60-86400, default 300). `snoozed_until`, when present, is a Unix timestamp. Workday numbers run from 0 (Monday) to 6 (Sunday). Launcher commands are stored as arrays of arguments in the config file; the settings UI and CLI accept quoted command strings. Per-repository keys use absolute, resolved folder paths. Existing configs containing only `repositories` continue to work.
 
-Configuration is reread on every scan. The CLI supports `--config /path/to/config.json` before commands for separate repository lists; the installed bar always uses the default config. Notification and fetch state lives under `$XDG_STATE_HOME/gitpulse`, normally `~/.local/state/gitpulse`.
+Configuration is reread on every scan. The CLI supports `--config /path/to/config.json` before commands for separate repository lists; the installed bar always uses the default config. Notification and fetch state lives under `$XDG_STATE_HOME/gitful`, normally `~/.local/state/gitful`.
 
 Dirty means staged, unstaged, untracked, or conflicted entries; ignored files are excluded. Untracked directories can count as one entry. No upstream is shown as unavailable, not zero. Unborn branches and linked worktrees are supported; bare repositories are not working trees.
 
@@ -190,7 +188,7 @@ Scans use up to eight concurrent workers. Actions and monitor runs for the same 
 ## Troubleshooting
 
 - **`omarchy plugin` is unavailable:** an Omarchy release with the Quickshell plugin system is required. A plain Quickshell installation cannot provide the shared Omarchy components.
-- **The icon is missing:** run `omarchy-shell shell rescanPlugins`, then `omarchy plugin enable bpc0sta.gitpulse --section right`. If the menu remains outdated, run `omarchy restart shell`.
+- **The icon is missing:** run `omarchy-shell shell rescanPlugins`, then `omarchy plugin enable bpc0sta.gitful --section right`. If the menu remains outdated, run `omarchy restart shell`.
 - **No incoming commit notifications:** the repository needs a branch with an upstream, a successful fetch, and incoming commits. Use **Fetch now** to check immediately. `notify-send` must be available, and desktop notifications must be allowed. A revision already reported is not reported again on every scan.
 - **Fetch or authentication errors:** run `git -C /path/to/repository fetch` in a terminal and resolve credentials, SSH agent access, or host verification there. Gitful's background fetches cannot ask interactive questions.
 - **No upstream:** for an existing remote branch, set tracking in a terminal, for example `git -C /path/to/repository branch --set-upstream-to=origin/main main`, replacing the remote and branch names as appropriate.
@@ -209,11 +207,10 @@ python3 -m unittest discover -s tests -v
 ./gitful install
 ```
 
-- `gitpulse.py`: status collection, periodic fetches, notification deduplication, pull guards, CLI, installer.
+- `gitful.py`: status collection, periodic fetches, notification deduplication, pull guards, CLI, installer.
 - `Widget.qml`: native Omarchy bar icon and themed repository menu.
 - `SettingsForm.qml`: global and per-repository preferences UI.
 - `manifest.json`: Omarchy plugin registration.
 - `gitful`: launcher resolving its own directory.
-- `gitpulse`: compatible launcher for existing installations.
 
 Tests use temporary local remotes to verify divergence, fast-forward pulls, refusal of unsafe pulls, fetch scheduling/failure, notification suppression/deduplication, worktrees, conflicts, stashes, and Git status edge cases. Launcher tests mock application spawning and verify argument/path handling. Preference tests cover inheritance, validation, and overnight work hours.

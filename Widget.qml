@@ -8,12 +8,12 @@ import qs.Ui
 
 Panel {
     id: root
-    moduleName: "bpc0sta.gitpulse"
-    ipcTarget: "bpc0sta.gitpulse"
+    moduleName: "bpc0sta.gitful"
+    ipcTarget: "bpc0sta.gitful"
     manageIpc: false
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
-    readonly property string helper: Qt.resolvedUrl("gitpulse.py").toString().replace("file://", "")
+    readonly property string helper: Qt.resolvedUrl("gitful.py").toString().replace("file://", "")
     readonly property color foreground: Color.popups.text
     readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.65)
     readonly property string fontFamily: Style.font.family

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 
-HELPER = Path(__file__).resolve().parents[1] / 'gitpulse.py'
+HELPER = Path(__file__).resolve().parents[1] / 'gitful.py'
 
 
 class RepositoryOrderTests(unittest.TestCase):

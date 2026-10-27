@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-HELPER = Path(__file__).resolve().parents[1] / 'gitpulse.py'
-spec = importlib.util.spec_from_file_location('gitpulse_preferences', HELPER)
+HELPER = Path(__file__).resolve().parents[1] / 'gitful.py'
+spec = importlib.util.spec_from_file_location('gitful_preferences', HELPER)
 gp = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gp)
 
