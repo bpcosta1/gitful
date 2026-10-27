@@ -1,0 +1,9 @@
+[project]
+name = "gitpulse"
+version = "0.2.0"
+description = "An Omarchy Git status widget with notifications and fast-forward pulls"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.ruff]
+line-length = 120

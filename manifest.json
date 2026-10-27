@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "bpc0sta.gitpulse",
+  "name": "GitPulse",
+  "version": "0.2.0",
+  "author": "bpc0sta",
+  "description": "Track repositories, notify on incoming commits, and pull from the bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "Widget.qml"},
+  "barWidget": {
+    "displayName": "GitPulse",
+    "category": "Development",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
