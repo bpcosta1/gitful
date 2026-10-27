@@ -6,7 +6,7 @@ Keep your repositories within reach. See changes, unpushed commits, incoming upd
 
 ![Gitful repository menu showing the branch, clean state, ahead/behind counts, repository ordering controls, and pull action](docs/images/gitful-panel.png)
 
-Previously called GitPulse. The repository URL, plugin ID (`bpc0sta.gitpulse`), and config/state paths retain `gitpulse` for compatibility. Use `./gitful` for the CLI; `./gitpulse` remains supported.
+Previously called GitPulse. The plugin ID (`bpc0sta.gitpulse`) and config/state paths retain `gitpulse` for compatibility. Use `./gitful` for the CLI; `./gitpulse` remains supported.
 
 ## Install
 
@@ -21,7 +21,7 @@ omarchy pkg add python git libnotify
 Install from a terminal in your Omarchy session:
 
 ```sh
-omarchy plugin add https://github.com/bpcosta1/gitpulse.git --enable
+omarchy plugin add https://github.com/bpcosta1/gitful.git --enable
 ```
 
 Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitpulse`; the default section is the right side of the bar. Click the Git icon, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
@@ -38,8 +38,8 @@ For development, or to keep a separate checkout:
 
 ```sh
 mkdir -p ~/dev
-git clone https://github.com/bpcosta1/gitpulse.git ~/dev/gitpulse
-cd ~/dev/gitpulse
+git clone https://github.com/bpcosta1/gitful.git ~/dev/gitful
+cd ~/dev/gitful
 ./gitful install
 ./gitful add ~/dev/my-project
 ./gitful open
@@ -110,7 +110,7 @@ omarchy plugin update bpc0sta.gitpulse
 For an installation copied from a source checkout:
 
 ```sh
-cd ~/dev/gitpulse
+cd ~/dev/gitful
 git pull --ff-only
 ./gitful install
 ```
