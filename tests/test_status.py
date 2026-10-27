@@ -38,6 +38,36 @@ class StatusTests(unittest.TestCase):
         self.assertTrue(row['dirty'])
         self.assertEqual(row['changed'], 1)
         self.assertIsNone(row['ahead'])
+        self.assertEqual(row['untracked'], 1)
+
+    def test_staged_unstaged_and_stashes_are_distinct(self):
+        self.commit()
+        (self.repo / 'file').write_text('staged')
+        self.g('add', 'file')
+        (self.repo / 'file').write_text('also unstaged')
+        (self.repo / 'new').touch()
+        row = gp.status(self.repo)
+        self.assertEqual((row['staged'], row['unstaged'], row['untracked'], row['changed']), (1, 1, 1, 2))
+        self.g('stash', 'push', '-u', '-m', 'saved work')
+        row = gp.status(self.repo)
+        self.assertFalse(row['dirty'])
+        self.assertEqual(row['stashes'], 1)
+
+    def test_real_merge_conflict_and_operation(self):
+        self.commit()
+        self.g('checkout', '-b', 'other')
+        (self.repo / 'file').write_text('other')
+        self.g('commit', '-am', 'other')
+        self.g('checkout', 'main')
+        (self.repo / 'file').write_text('main')
+        self.g('commit', '-am', 'main')
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.g('merge', 'other')
+        row = gp.status(self.repo)
+        self.assertEqual(row['conflicts'], 1)
+        self.assertEqual(row['operation'], 'Merge')
+        self.assertEqual((row['staged'], row['unstaged']), (0, 0))
+        self.assertTrue(row['dirty'])
 
     def test_clean_detached_and_rename(self):
         self.commit()
@@ -79,6 +109,10 @@ class StatusTests(unittest.TestCase):
         worktree = self.base / 'worktree'
         self.g('worktree', 'add', '-b', 'feature', str(worktree))
         self.assertEqual(gp.status(worktree)['branch'], 'feature')
+        gitdir = Path(self.run_git('-C', str(worktree), 'rev-parse', '--absolute-git-dir'))
+        (gitdir / 'CHERRY_PICK_HEAD').write_text(self.g('rev-parse', 'HEAD'))
+        self.assertEqual(gp.status(worktree)['operation'], 'Cherry-pick')
+        self.assertIsNone(gp.status(self.repo)['operation'])
 
     def test_config_validation(self):
         path = self.base / 'config.json'
@@ -177,6 +211,38 @@ class StatusTests(unittest.TestCase):
             row, state = gp.monitor_repo(str(self.repo), state, 300)
             fetch.assert_not_called()
         self.assertEqual(row['fetch_error'], 'Offline')
+
+    def test_muted_notifications_wait_until_resumed_and_keep_fetching(self):
+        clone = self.setup_remote()
+        self.advance_remote(clone, 'incoming')
+        config = {'repositories': [str(self.repo)], 'notifications': False}
+        with patch.object(gp, 'notify', return_value=True) as notify:
+            row, state = gp.monitor_repo(str(self.repo), {}, 300, config=config)
+            self.assertEqual(row['behind'], 1)
+            self.assertEqual(row['notification_status'], 'Muted globally')
+            self.assertIsNotNone(row['fetched'])
+            notify.assert_not_called()
+            self.assertNotIn('notified', state)
+            config['notifications'] = True
+            row, state = gp.monitor_repo(str(self.repo), state, 300, config=config)
+            self.assertEqual(notify.call_count, 1)
+            gp.monitor_repo(str(self.repo), state, 300, config=config)
+            self.assertEqual(notify.call_count, 1)
+
+    def test_per_repo_fetch_interval_and_mute(self):
+        path = str(self.repo)
+        self.setup_remote()
+        config = {'repositories': [path], 'fetch_interval': 300,
+                  'repository_settings': {path: {'fetch_interval': 900, 'notifications': False}}}
+        saved = self.base / 'monitor.json'
+        gp.save_config(saved, {path: {'attempted': 1000, 'fetched': 1000}})
+        with patch.object(gp.time, 'time', return_value=1400), patch.object(gp, 'fetch_repo') as fetch:
+            row = gp.monitor(config, saved)[0]
+            fetch.assert_not_called()
+            self.assertEqual(row['notification_status'], 'Muted')
+            self.assertEqual(row['settings']['fetch_interval'], 900)
+            gp.monitor(config, saved, force=True)
+            fetch.assert_called_once_with(path)
 
 
 if __name__ == '__main__':

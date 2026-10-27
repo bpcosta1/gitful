@@ -1,7 +1,7 @@
 [project]
-name = "gitpulse"
-version = "0.2.0"
-description = "An Omarchy Git status widget with notifications and fast-forward pulls"
+name = "gitful"
+version = "0.3.0"
+description = "Git status and development shortcuts for the Omarchy bar"
 requires-python = ">=3.10"
 dependencies = []
 

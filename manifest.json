@@ -1,14 +1,18 @@
 {
   "schemaVersion": 1,
   "id": "bpc0sta.gitpulse",
-  "name": "GitPulse",
-  "version": "0.2.0",
+  "name": "Gitful",
+  "version": "0.3.0",
   "author": "bpc0sta",
-  "description": "Track repositories, notify on incoming commits, and pull from the bar.",
-  "kinds": ["bar-widget"],
-  "entryPoints": {"barWidget": "Widget.qml"},
+  "description": "Open development environments, track Git changes, and control incoming-commit notifications from the bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
   "barWidget": {
-    "displayName": "GitPulse",
+    "displayName": "Gitful",
     "category": "Development",
     "allowMultiple": false,
     "defaultSection": "right"
