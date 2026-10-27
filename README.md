@@ -49,19 +49,18 @@ The source installer copies the plugin into `~/.config/omarchy/plugins/bpc0sta.g
 
 ## Use
 
-Click the Git icon in the right side of the bar. Its badge shows the total incoming commit count, or `!` when a repository or fetch needs attention.
+Click the Git icon in the right side of the bar. Its badge shows incoming commits, or `!` when a repository or fetch needs attention. The popup summarizes repositories and incoming commits in its header. Press **Ctrl+K** to focus repository search.
 
 - **+ Track repository**: open the tracking form and enter a local repository path, such as `~/dev/project`.
-- **Options > Untrack**: remove a repository from the list; its files are kept.
-- **Options > Move up / Move down**: change the saved repository order. The order persists across restarts.
-- **↻ in the footer**: check upstreams immediately and refresh all statuses.
+- **••• on a repository**: open repository settings, change its place in the saved order, or untrack it. Untracking keeps its files.
+- **Fetch now** in the footer: check upstreams immediately and refresh all statuses. The footer also shows the last fetch and automatic check interval.
 - **Pull**: fetch the selected branch's remote, then fast-forward to its upstream.
 - **IDE / Files / Agent**: open the repository in your preferred editor, file manager, or coding agent. Applications start with the repository as their working directory.
-- **Options** on a repository: set its notification policy, snooze, fetch interval, and application overrides.
-- **⚙ Settings** in the top right: set global application preferences, notifications, fetch intervals, and work hours.
-- Filter by repository name, path, or branch. Close with Escape or an outside click.
+- **••• > Repository settings**: set that repository's notification policy, snooze, fetch interval, and application overrides.
+- **Settings** in the top right: set global application preferences, notifications, fetch intervals, and work hours.
+- Search by repository name, path, or branch. Close with Escape or an outside click.
 
-The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. Repository Options show the last successful fetch and stale-ref warnings to help distinguish cached information from a successful remote check. Conflicts also flag the bar icon.
+The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. Repository settings show the last successful fetch and stale-ref warnings to help distinguish cached information from a successful remote check. Conflicts also flag the bar icon.
 
 Gitful refuses to pull dirty trees, detached HEADs, branches without upstreams, diverged branches, and repositories with an ongoing merge/rebase/cherry-pick/bisect. It never automatically stashes, rebases, or creates merge commits. Git failures are shown in the menu.
 
@@ -69,7 +68,7 @@ Gitful refuses to pull dirty trees, detached HEADs, branches without upstreams, 
 
 By default, **IDE** uses the editor selected in Omarchy defaults, **Files** uses your default desktop file manager, and **Agent** starts the coding agent selected in Omarchy defaults inside your default terminal. The agent is launched interactively with its normal permissions and no task prompt. Applications and agents must already be installed and configured.
 
-Set custom commands in **Settings**, or override them for one repository under **Options**. For example:
+Set custom commands in **Settings**, or override them for one repository under **••• > Repository settings**. For example:
 
 | Action | Example command |
 | --- | --- |
@@ -87,14 +86,14 @@ Local status is checked every 15 seconds while the widget is enabled, including 
 
 Incoming commits generate a desktop notification. The upstream revision is remembered on disk so polling, multiple bar instances, or restarting the shell does not repeatedly notify for the same incoming revision. Existing unpulled commits are reported on the first scan too. After catching up, the notification state resets.
 
-Use **Settings** for global notification preferences and **Options** for per-repository controls:
+Use **Settings** for global notification preferences and **••• > Repository settings** for per-repository controls:
 
 - Mute notifications globally or for one repository.
 - Snooze for an hour, or clear an active snooze with **Unsnooze**.
 - Choose global work hours and weekdays using your local timezone. Overnight periods are supported and belong to the day they start on.
 - Set fetch intervals from 1 to 1440 minutes. A blank repository interval inherits the global setting.
 
-Select **Save** in the settings header after changing mute, work hours, launchers, or fetch intervals. Snooze/unsnooze buttons apply immediately. Suppression leaves monitoring and fetches running; pending incoming revisions can notify on the first scan after notifications become allowed again. Global mute, global snooze, and work hours apply to every repository. The repository card shows its effective notification state.
+Select **Save** in the settings header after changing mute, work hours, launchers, or fetch intervals. Snooze/unsnooze buttons apply immediately. Suppression leaves monitoring and fetches running; pending incoming revisions can notify on the first scan after notifications become allowed again. Global mute, global snooze, and work hours apply to every repository. Per-repository settings show the effective notification state.
 
 Network or authentication failures retain locally known counts and display a fetch error. Fetches use existing Git credentials with interactive prompts disabled and SSH batch mode enabled. Fix authentication in your terminal if needed. Repositories without upstreams are not fetched. Disabled widgets do not monitor repositories.
 
