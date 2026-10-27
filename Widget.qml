@@ -23,7 +23,9 @@ Panel {
     property bool actionFailed: false
     property string updated: "Waiting for first scan"
     property string query: ""
-    property bool attentionOnly: false
+    property bool trackingOpen: false
+    readonly property var selectedRepo: repositories.find(r => r.path === settingsPath) || null
+    readonly property int selectedIndex: repositories.findIndex(r => r.path === settingsPath)
     property var preferences: ({})
     property bool settingsOpen: false
     property string settingsPath: ""
@@ -31,8 +33,8 @@ Panel {
     property var editingPreferences: ({})
     readonly property bool busy: scan.running || action.running
     readonly property var filtered: repositories.filter(r =>
-        (r.name + " " + r.path + " " + (r.branch || "")).toLowerCase().includes(query.toLowerCase()) &&
-        (!attentionOnly || r.error || r.fetch_error || r.dirty || r.ahead || r.behind || r.stashes || r.operation))
+        (r.name + " " + r.path + " " + (r.branch || "")).toLowerCase().includes(query.toLowerCase()))
+    readonly property real lastFetch: repositories.reduce((latest, repo) => Math.max(latest, repo.fetched || 0), 0)
     readonly property int incoming: repositories.reduce((n, r) => n + (r.behind || 0), 0)
     readonly property int dirty: repositories.filter(r => r.dirty).length
     readonly property bool hasError: failure !== "" || repositories.some(r => r.error || r.fetch_error)
@@ -51,8 +53,8 @@ Panel {
         action.running = true;
     }
     function moveRepository(path, offset) {
-        const index = filtered.findIndex(repo => repo.path === path);
-        const neighbor = filtered[index + offset];
+        const index = repositories.findIndex(repo => repo.path === path);
+        const neighbor = repositories[index + offset];
         if (index < 0 || !neighbor) return;
         runAction("move", path, [offset < 0 ? "before" : "after", neighbor.path]);
     }
@@ -61,6 +63,7 @@ Panel {
         settingsTitle = repo ? repo.name + " settings" : "Gitful settings";
         editingPreferences = repo ? (repo.settings || {}) : preferences;
         settingsOpen = true;
+        trackingOpen = false;
         message = "";
     }
     function saveSettings(changes) {
@@ -132,6 +135,8 @@ Panel {
                     root.message = result.error || result.message || "Done";
                     if (result.ok && action.command[2] === "settings") root.editingPreferences = result.preferences;
                     if (result.ok && action.command[2] === "launch") root.close();
+                    if (result.ok && action.command[2] === "add") { root.trackingOpen = false; addPath.text = ""; }
+                    if (result.ok && action.command[2] === "remove") root.settingsOpen = false;
                     if (result.ok && result.order) {
                         const order = result.order;
                         const rank = path => order.includes(path) ? order.indexOf(path) : order.length;
@@ -174,27 +179,26 @@ Panel {
         anchorItem: button; owner: root; bar: root.bar; open: root.opened
         focusTarget: catcher
         contentWidth: fittedContentWidth(Style.space(520))
-        contentHeight: fittedContentHeight(Style.space(root.settingsOpen ? 620 : Math.min(620, 250 + root.filtered.length * 270)), Style.space(690))
+        contentHeight: fittedContentHeight(Style.space(root.settingsOpen ? 620 : Math.min(620, 190 + (root.trackingOpen ? 50 : 0) + root.filtered.length * 175)), Style.space(690))
         FocusScope {
             id: catcher
             anchors.fill: parent
             focus: true
-            Keys.onEscapePressed: root.settingsOpen ? root.settingsOpen = false : root.close()
+            Keys.onEscapePressed: root.settingsOpen ? root.settingsOpen = false : root.trackingOpen ? root.trackingOpen = false : root.close()
             ColumnLayout {
                 anchors.fill: parent; spacing: Style.space(12)
                 RowLayout {
                     Layout.fillWidth: true
                     Label { text: root.settingsOpen ? root.settingsTitle : "Gitful"; font.bold: true; font.pixelSize: Style.space(20); Layout.fillWidth: true; elide: Text.ElideRight }
-                    ActionButton { text: root.settingsOpen ? "Back" : "Settings"; onClicked: root.settingsOpen ? root.settingsOpen = false : root.showSettings(null) }
+                    ActionButton { visible: root.settingsOpen; text: "Back"; onClicked: root.settingsOpen = false }
                     ActionButton { visible: root.settingsOpen; text: "Save"; enabled: !root.busy; onClicked: settingsForm.save() }
-                    ActionButton { visible: !root.settingsOpen; text: root.busy ? "Working…" : "Fetch now"; enabled: !root.busy; onClicked: root.refresh(true) }
-                    ActionButton { text: "×"; onClicked: root.close(); Controls.ToolTip.text: "Close"; Controls.ToolTip.visible: hovered }
+                    ActionButton { visible: !root.settingsOpen; text: "+ Track repository"; onClicked: { root.trackingOpen = !root.trackingOpen; if (root.trackingOpen) addPath.forceActiveFocus(); } }
+                    ActionButton { visible: !root.settingsOpen; text: "⚙"; Accessible.name: "Settings"; Controls.ToolTip.text: "Settings"; Controls.ToolTip.visible: hovered; onClicked: root.showSettings(null) }
                 }
-                RowLayout {
+                Label {
                     visible: !root.settingsOpen
-                    Layout.fillWidth: true
-                    Label { text: root.repositories.length + " repositories · " + root.incoming + " incoming commits"; color: root.muted; Layout.fillWidth: true; elide: Text.ElideRight }
-                    ActionButton { text: "Needs attention"; checkable: true; checked: root.attentionOnly; onClicked: root.attentionOnly = checked }
+                    text: root.repositories.length + " repositories · " + root.incoming + " incoming commits"
+                    color: root.muted; Layout.fillWidth: true; elide: Text.ElideRight
                 }
                 Controls.TextField {
                     visible: !root.settingsOpen
@@ -224,32 +228,29 @@ Panel {
                         ColumnLayout {
                             id: details
                             anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(10) }
-                            spacing: Style.space(5)
+                            spacing: Style.space(8)
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: row.modelData.name; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
-                                Label { text: row.modelData.conflicts ? "● Conflicts" : row.modelData.dirty ? "● Dirty · " + row.modelData.changed : "● Clean"; color: row.modelData.conflicts ? Color.urgent : row.modelData.dirty ? Color.accent : root.muted; visible: !row.modelData.error }
-                                ActionButton {
-                                    text: "↑"; enabled: !root.busy && row.index > 0
-                                    onClicked: root.moveRepository(row.modelData.path, -1)
-                                    Accessible.name: "Move " + row.modelData.name + " up"
-                                    Controls.ToolTip.text: "Move up · order is saved"; Controls.ToolTip.visible: hovered
-                                }
-                                ActionButton {
-                                    text: "↓"; enabled: !root.busy && row.index < root.filtered.length - 1
-                                    onClicked: root.moveRepository(row.modelData.path, 1)
-                                    Accessible.name: "Move " + row.modelData.name + " down"
-                                    Controls.ToolTip.text: "Move down · order is saved"; Controls.ToolTip.visible: hovered
-                                }
+                                Label { text: row.modelData.conflicts ? "● Conflicts" : row.modelData.dirty ? "● Modified" : "● Clean"; color: row.modelData.conflicts ? Color.urgent : row.modelData.dirty ? Color.accent : root.muted; visible: !row.modelData.error }
+                                ActionButton { text: "Options"; enabled: !root.busy; onClicked: root.showSettings(row.modelData) }
                             }
                             Label { text: row.modelData.error || ("⑂ " + row.modelData.branch + (row.modelData.upstream ? " → " + row.modelData.upstream : " · No upstream")); color: row.modelData.error ? Color.urgent : root.muted; elide: Text.ElideRight; Layout.fillWidth: true }
                             Label { text: row.modelData.path; font.pixelSize: Style.space(10); color: root.muted; elide: Text.ElideMiddle; Layout.fillWidth: true; Controls.ToolTip.text: text; Controls.ToolTip.visible: pathHover.hovered; HoverHandler { id: pathHover } }
-                            Label { visible: !row.modelData.error; text: root.changeSummary(row.modelData); color: row.modelData.conflicts ? Color.urgent : root.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                            Label { visible: !row.modelData.error && !!(row.modelData.dirty || row.modelData.stashes); text: root.changeSummary(row.modelData); color: row.modelData.conflicts ? Color.urgent : root.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
                             Label { visible: !!row.modelData.operation; text: (row.modelData.operation || "") + " in progress"; color: Color.urgent; Layout.fillWidth: true }
                             Label { visible: !!row.modelData.fetch_error; text: "Fetch failed: " + (row.modelData.fetch_error || ""); color: Color.urgent; elide: Text.ElideRight; Layout.fillWidth: true; Controls.ToolTip.text: text; Controls.ToolTip.visible: fetchHover.hovered; HoverHandler { id: fetchHover } }
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: row.modelData.ahead === null ? "Comparison unavailable" : row.modelData.ahead + " unpushed · " + row.modelData.behind + " incoming"; color: row.modelData.behind || row.modelData.ahead ? Color.accent : root.muted; Layout.fillWidth: true; elide: Text.ElideRight }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: Style.space(5)
+                                ActionButton { text: "IDE"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "editor"); Controls.ToolTip.text: "Open preferred editor in this repository"; Controls.ToolTip.visible: hovered }
+                                ActionButton { text: "Files"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "files") }
+                                ActionButton { text: "Agent"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "agent"); Controls.ToolTip.text: "Start your configured coding agent in this repository"; Controls.ToolTip.visible: hovered }
+                                Item { Layout.fillWidth: true }
                                 ActionButton {
                                     text: "Pull"
                                     enabled: !root.busy && !row.modelData.error && !row.modelData.dirty && !row.modelData.operation && !row.modelData.detached && !!row.modelData.upstream && !(row.modelData.ahead && row.modelData.behind)
@@ -257,38 +258,43 @@ Panel {
                                     Controls.ToolTip.text: root.pullReason(row.modelData); Controls.ToolTip.visible: hovered
                                 }
                             }
-                            Label { visible: row.modelData.dirty || !!(row.modelData.ahead && row.modelData.behind); text: root.pullReason(row.modelData); color: root.muted; font.pixelSize: Style.space(10); wrapMode: Text.Wrap; Layout.fillWidth: true }
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: Style.space(5)
-                                ActionButton { text: "IDE"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "editor"); Controls.ToolTip.text: "Open preferred editor in this repository"; Controls.ToolTip.visible: hovered }
-                                ActionButton { text: "Files"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "files") }
-                                ActionButton { text: "Agent"; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "agent"); Controls.ToolTip.text: "Start your configured coding agent in this repository"; Controls.ToolTip.visible: hovered }
-                                Item { Layout.fillWidth: true }
-                                ActionButton { text: "Options"; enabled: !root.busy; onClicked: root.showSettings(row.modelData) }
-                                ActionButton { text: "Untrack"; enabled: !root.busy; onClicked: root.runAction("remove", row.modelData.path); Controls.ToolTip.text: "Remove from Gitful; files are kept"; Controls.ToolTip.visible: hovered }
-                            }
-                            Label { text: root.fetchSummary(row.modelData) + " · every " + Math.round(((row.modelData.settings || {}).fetch_interval || 300) / 60) + "m"; color: row.modelData.stale ? Color.accent : root.muted; font.pixelSize: Style.space(10); Layout.fillWidth: true; wrapMode: Text.Wrap }
-                            Label { text: "Notifications: " + (row.modelData.notification_status || "On"); color: root.muted; font.pixelSize: Style.space(10); Layout.fillWidth: true }
                         }
                     }
-                    Label { anchors.centerIn: parent; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; visible: root.filtered.length === 0; text: root.repositories.length ? "No matching repositories" : "Track a repository using its folder path below."; color: root.muted }
+                    Label { anchors.centerIn: parent; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; visible: root.filtered.length === 0; text: root.repositories.length ? "No matching repositories" : "Add your first repository with + Track repository."; color: root.muted }
                 }
                 Controls.ScrollView {
                     id: settingsScroll
                     visible: root.settingsOpen
                     Layout.fillWidth: true; Layout.fillHeight: true
                     contentWidth: availableWidth
-                    SettingsForm {
-                        id: settingsForm
+                    ColumnLayout {
                         width: settingsScroll.availableWidth
-                        preferences: root.editingPreferences
-                        perRepository: root.settingsPath !== ""
-                        busy: root.busy
-                        onSaveRequested: function(changes) { root.saveSettings(changes); }
+                        spacing: Style.space(16)
+                        ColumnLayout {
+                            visible: root.settingsPath !== ""
+                            Layout.fillWidth: true
+                            Label { text: root.settingsPath; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Label { text: root.selectedRepo ? root.fetchSummary(root.selectedRepo) + " · Notifications: " + (root.selectedRepo.notification_status || "On") : ""; color: root.muted; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                ActionButton { text: "Move up"; enabled: !root.busy && root.selectedIndex > 0; onClicked: root.moveRepository(root.settingsPath, -1) }
+                                ActionButton { text: "Move down"; enabled: !root.busy && root.selectedIndex >= 0 && root.selectedIndex < root.repositories.length - 1; onClicked: root.moveRepository(root.settingsPath, 1) }
+                                Item { Layout.fillWidth: true }
+                                ActionButton { text: "Untrack"; enabled: !root.busy; onClicked: root.runAction("remove", root.settingsPath); Controls.ToolTip.text: "Remove from Gitful; files are kept"; Controls.ToolTip.visible: hovered }
+                            }
+                        }
+                        SettingsForm {
+                            id: settingsForm
+                            Layout.fillWidth: true
+                            preferences: root.editingPreferences
+                            perRepository: root.settingsPath !== ""
+                            busy: root.busy
+                            onSaveRequested: function(changes) { root.saveSettings(changes); }
+                        }
                     }
                 }
                 RowLayout {
-                    visible: !root.settingsOpen
+                    visible: !root.settingsOpen && root.trackingOpen
                     Layout.fillWidth: true
                     Controls.TextField {
                         id: addPath
@@ -298,11 +304,16 @@ Panel {
                         font.family: root.fontFamily; font.pixelSize: Style.font.body
                         background: Rectangle { color: "transparent"; radius: Style.space(5); border.color: root.muted }
                         onAccepted: if (text.trim() && !root.busy) root.runAction("add", text.trim())
-                        Keys.onEscapePressed: root.close()
+                        Keys.onEscapePressed: root.trackingOpen = false
                     }
                     ActionButton { text: "Track"; enabled: !root.busy && addPath.text.trim() !== ""; onClicked: root.runAction("add", addPath.text.trim()) }
+                    ActionButton { text: "Cancel"; onClicked: root.trackingOpen = false }
                 }
-                Label { text: root.updated + " · Remote checks every " + Math.round((root.preferences.fetch_interval || 300) / 60) + "m by default"; color: root.muted; font.pixelSize: Style.space(10); Layout.fillWidth: true; elide: Text.ElideRight }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: (root.busy ? "Working…" : root.lastFetch ? "Last fetch " + Qt.formatDateTime(new Date(root.lastFetch * 1000), "HH:mm") : "No fetch yet") + " · Remote checks every " + Math.round((root.preferences.fetch_interval || 300) / 60) + "m by default"; color: root.muted; font.pixelSize: Style.space(10); Layout.fillWidth: true; elide: Text.ElideRight }
+                    ActionButton { text: "↻"; Accessible.name: "Fetch all repositories"; enabled: !root.busy; onClicked: root.refresh(true); Controls.ToolTip.text: "Fetch all repositories"; Controls.ToolTip.visible: hovered }
+                }
             }
         }
     }

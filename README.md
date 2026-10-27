@@ -24,7 +24,7 @@ Install from a terminal in your Omarchy session:
 omarchy plugin add https://github.com/bpcosta1/gitful.git --enable
 ```
 
-Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitful`; the default section is the right side of the bar. Click the Git icon, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
+Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitful`; the default section is the right side of the bar. Click the Git icon, choose **+ Track repository**, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
 
 The enabled widget loads automatically when the shell starts. No separate service or autostart entry is needed. To enable it later:
 
@@ -51,18 +51,17 @@ The source installer copies the plugin into `~/.config/omarchy/plugins/bpc0sta.g
 
 Click the Git icon in the right side of the bar. Its badge shows the total incoming commit count, or `!` when a repository or fetch needs attention.
 
-- **Track**: enter a local repository path, such as `~/dev/project`.
-- **Untrack**: remove a repository from the list; its files are kept.
-- **↑ / ↓ beside each repository name**: move it up or down. The order is saved immediately and persists across restarts. When filtering, it moves relative to the next visible repository.
-- **Fetch now**: check upstreams immediately and refresh all statuses.
+- **+ Track repository**: open the tracking form and enter a local repository path, such as `~/dev/project`.
+- **Options > Untrack**: remove a repository from the list; its files are kept.
+- **Options > Move up / Move down**: change the saved repository order. The order persists across restarts.
+- **↻ in the footer**: check upstreams immediately and refresh all statuses.
 - **Pull**: fetch the selected branch's remote, then fast-forward to its upstream.
 - **IDE / Files / Agent**: open the repository in your preferred editor, file manager, or coding agent. Applications start with the repository as their working directory.
 - **Options** on a repository: set its notification policy, snooze, fetch interval, and application overrides.
-- **Settings** in the header: set global application preferences, notifications, fetch intervals, and work hours.
-- **Needs attention**: show repositories with local changes, unpushed/incoming commits, stashes, ongoing Git operations, or errors. Your saved order is preserved.
-- Filter by repository name, path, or branch. Close with Escape, the × button, or an outside click.
+- **⚙ Settings** in the top right: set global application preferences, notifications, fetch intervals, and work hours.
+- Filter by repository name, path, or branch. Close with Escape or an outside click.
 
-The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. The last successful fetch and stale-ref warnings help distinguish cached information from a successful remote check. Conflicts also flag the bar icon.
+The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. Repository Options show the last successful fetch and stale-ref warnings to help distinguish cached information from a successful remote check. Conflicts also flag the bar icon.
 
 Gitful refuses to pull dirty trees, detached HEADs, branches without upstreams, diverged branches, and repositories with an ongoing merge/rebase/cherry-pick/bisect. It never automatically stashes, rebases, or creates merge commits. Git failures are shown in the menu.
 
@@ -189,7 +188,7 @@ Scans use up to eight concurrent workers. Actions and monitor runs for the same 
 
 - **`omarchy plugin` is unavailable:** an Omarchy release with the Quickshell plugin system is required. A plain Quickshell installation cannot provide the shared Omarchy components.
 - **The icon is missing:** run `omarchy-shell shell rescanPlugins`, then `omarchy plugin enable bpc0sta.gitful --section right`. If the menu remains outdated, run `omarchy restart shell`.
-- **No incoming commit notifications:** the repository needs a branch with an upstream, a successful fetch, and incoming commits. Use **Fetch now** to check immediately. `notify-send` must be available, and desktop notifications must be allowed. A revision already reported is not reported again on every scan.
+- **No incoming commit notifications:** the repository needs a branch with an upstream, a successful fetch, and incoming commits. Use **↻ in the footer** to check immediately. `notify-send` must be available, and desktop notifications must be allowed. A revision already reported is not reported again on every scan.
 - **Fetch or authentication errors:** run `git -C /path/to/repository fetch` in a terminal and resolve credentials, SSH agent access, or host verification there. Gitful's background fetches cannot ask interactive questions.
 - **No upstream:** for an existing remote branch, set tracking in a terminal, for example `git -C /path/to/repository branch --set-upstream-to=origin/main main`, replacing the remote and branch names as appropriate.
 - **Pull is disabled or refused:** commit or stash local changes, check out a tracked branch, and finish any ongoing Git operation. Diverged branches need to be reconciled in your usual Git client.
