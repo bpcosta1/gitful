@@ -24,7 +24,7 @@ Install from a terminal in your Omarchy session:
 omarchy plugin add https://github.com/bpcosta1/gitful.git --enable
 ```
 
-Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitful`; the default section is the right side of the bar. Click the Git icon, choose **+ Track repository**, enter a repository path such as `~/dev/my-project`, and select **Track**. The initial list is empty on a fresh installation.
+Follow the prompts to enable Gitful and choose its bar section. The plugin ID is `bpc0sta.gitful`; the default section is the right side of the bar. Click the Git icon, choose **+ Track repository**, enter a repository path such as `~/dev/my-project`, and select **Add**. The initial list is empty on a fresh installation.
 
 The enabled widget loads automatically when the shell starts. No separate service or autostart entry is needed. To enable it later:
 
@@ -49,24 +49,24 @@ The source installer copies the plugin into `~/.config/omarchy/plugins/bpc0sta.g
 
 ## Use
 
-Click the Git icon in the right side of the bar. Its badge shows incoming commits, or `!` when a repository or fetch needs attention. The popup summarizes repositories and incoming commits in its header. Press **Ctrl+K** to focus repository search.
+Click the Git icon in the right side of the bar. Its badge shows incoming commits, or `!` when a repository or fetch needs attention. Press **Ctrl+K** to focus repository search.
 
 - **+ Track repository**: open the tracking form and enter a local repository path, such as `~/dev/project`.
 - **••• on a repository**: open repository settings, change its place in the saved order, or untrack it. Untracking keeps its files.
 - **Fetch now** in the footer: check upstreams immediately and refresh all statuses. The footer also shows the last fetch and automatic check interval.
 - **Pull**: fetch the selected branch's remote, then fast-forward to its upstream.
-- **IDE / Files / Agent**: open the repository in your preferred editor, file manager, or coding agent. Applications start with the repository as their working directory.
+- **IDE / Files / Terminal / Agent**: open the repository in your preferred editor, file manager, default terminal, or coding agent. Applications start with the repository as their working directory.
 - **••• > Repository settings**: set that repository's notification policy, snooze, fetch interval, and application overrides.
-- **Settings** in the top right: set global application preferences, notifications, fetch intervals, and work hours.
+- **Settings** in the top right: configure notifications, notification hours and types, fetch behavior, and application launchers.
 - Search by repository name, path, or branch. Close with Escape or an outside click.
 
-The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. Repository settings show the last successful fetch and stale-ref warnings to help distinguish cached information from a successful remote check. Conflicts also flag the bar icon.
+The menu shows branch, upstream, staged/unstaged/untracked counts, stashes, conflicts, ongoing Git operations, and unpushed/incoming commits relative to the configured upstream. One file may have both staged and unstaged changes; conflicted entries are counted separately. The footer shows the last successful fetch. Conflicts also flag the bar icon.
 
 Gitful refuses to pull dirty trees, detached HEADs, branches without upstreams, diverged branches, and repositories with an ongoing merge/rebase/cherry-pick/bisect. It never automatically stashes, rebases, or creates merge commits. Git failures are shown in the menu.
 
 ### Open your development environment
 
-By default, **IDE** uses the editor selected in Omarchy defaults, **Files** uses your default desktop file manager, and **Agent** starts the coding agent selected in Omarchy defaults inside your default terminal. The agent is launched interactively with its normal permissions and no task prompt. Applications and agents must already be installed and configured.
+By default, **IDE** uses the editor selected in Omarchy defaults, **Files** uses your default desktop file manager, **Terminal** opens your default terminal in the repository directory, and **Agent** starts the coding agent selected in Omarchy defaults inside your default terminal. The agent is launched interactively with its normal permissions and no task prompt. Applications and agents must already be installed and configured.
 
 Set custom commands in **Settings**, or override them for one repository under **••• > Repository settings**. For example:
 
@@ -76,7 +76,7 @@ Set custom commands in **Settings**, or override them for one repository under *
 | Files | `thunar {path}` |
 | Agent | `claude` |
 
-Use `{path}` to insert the repository folder. Editor/file-manager commands receive the path automatically if you omit the placeholder. Agent commands run in a new terminal in the repository directory. For terminal editors, configure a terminal command such as `xdg-terminal-exec --dir={path} nvim {path}`. Blank command fields restore defaults; blank repository overrides inherit global commands.
+Use `{path}` to insert the repository folder. Editor/file-manager commands receive the path automatically if you omit the placeholder. Agent commands run in a new terminal in the repository directory. The Terminal action always uses the default terminal. For terminal editors, configure a terminal command such as `xdg-terminal-exec --dir={path} nvim {path}`. Blank command fields restore defaults; blank repository overrides inherit global commands.
 
 Commands are parsed into arguments and launched directly: quoting is supported, while pipes, shell substitutions, and environment-variable expansion are not performed. Repository paths containing spaces are kept intact. A custom command requiring shell behavior can point to your own launcher script.
 
@@ -84,16 +84,18 @@ Commands are parsed into arguments and launched directly: quoting is supported, 
 
 Local status is checked every 15 seconds while the widget is enabled, including with the menu closed. Each tracked branch's configured remote is fetched when first monitored and then every five minutes by default. The previous fetch attempt is remembered across shell restarts. This updates local refs; only an explicit **Pull** changes working files.
 
-Incoming commits generate a desktop notification. The upstream revision is remembered on disk so polling, multiple bar instances, or restarting the shell does not repeatedly notify for the same incoming revision. Existing unpulled commits are reported on the first scan too. After catching up, the notification state resets.
+Incoming commits and fetch errors can generate desktop notifications. The upstream revision and last reported fetch error are remembered on disk so polling, multiple bar instances, or restarting the shell does not repeatedly notify about the same event. Existing unpulled commits are reported on the first scan too. After catching up or a successful fetch, the notification state resets.
 
-Use **Settings** for global notification preferences and **••• > Repository settings** for per-repository controls:
+Use **Settings** for global preferences and **••• > Repository settings** for per-repository notification overrides, fetch intervals, and application commands:
 
-- Mute notifications globally or for one repository.
-- Snooze for an hour, or clear an active snooze with **Unsnooze**.
-- Choose global work hours and weekdays using your local timezone. Overnight periods are supported and belong to the day they start on.
-- Set fetch intervals from 1 to 1440 minutes. A blank repository interval inherits the global setting.
+- Enable notifications globally or for one repository, and choose whether to notify about incoming commits and fetch errors.
+- Snooze for one hour, four hours, until tomorrow, or indefinitely. Snooze changes are saved with the rest of the form.
+- Set a global notification schedule and weekdays in local time. Overnight periods belong to the day they start on. Fetching continues outside the notification schedule.
+- Choose 1, 5, or 15 minute fetch intervals, or set a custom interval from 1 to 1440 minutes. A repository can inherit the global interval.
+- Enable or disable fetching when Gitful starts. Fetching only updates remote-tracking refs; **Pull** is the separate action that fast-forwards a clean branch.
+- Choose detected applications or set custom argument-based commands. **Test command** starts the selected application in a repository folder and reports whether the process launched.
 
-Select **Save** in the settings header after changing mute, work hours, launchers, or fetch intervals. Snooze/unsnooze buttons apply immediately. Suppression leaves monitoring and fetches running; pending incoming revisions can notify on the first scan after notifications become allowed again. Global mute, global snooze, and work hours apply to every repository. Per-repository settings show the effective notification state.
+Select **Save** to apply changes or **Cancel** to discard them. The form shows an unsaved changes indicator. Global mute, global snooze, and notification hours apply to every repository; per-repository settings can further mute that repository and select its notification types.
 
 Network or authentication failures retain locally known counts and display a fetch error. Fetches use existing Git credentials with interactive prompts disabled and SSH batch mode enabled. Fix authentication in your terminal if needed. Repositories without upstreams are not fetched. Disabled widgets do not monitor repositories.
 
@@ -138,8 +140,11 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 ./gitful status            # Local JSON snapshot; no fetch or notifications
 ./gitful monitor           # Fetch if due, notify, emit JSON
 ./gitful monitor --fetch   # Fetch immediately, notify, emit JSON
+./gitful monitor --startup # Apply the fetch-on-startup setting
+./gitful applications      # Detect supported installed applications
 ./gitful pull ~/dev/my-project
 ./gitful launch ~/dev/my-project editor  # Also: files, agent
+./gitful test-launch editor 'code --new-window {path}' --repo ~/dev/my-project
 ./gitful settings                       # Show global preferences
 ./gitful settings --set '{"notifications": false}'
 ./gitful settings --repo ~/dev/my-project --set '{"snooze_minutes": 60}'
@@ -156,7 +161,12 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 {
   "repositories": ["/home/you/dev/project"],
   "fetch_interval": 300,
+  "fetch_on_startup": true,
   "notifications": true,
+  "notification_types": {
+    "incoming_commits": true,
+    "fetch_errors": true
+  },
   "work_hours": {
     "enabled": false,
     "start": "09:00",
@@ -175,7 +185,7 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 }
 ```
 
-`fetch_interval` is seconds (60-86400, default 300). `snoozed_until`, when present, is a Unix timestamp. Workday numbers run from 0 (Monday) to 6 (Sunday). Launcher commands are stored as arrays of arguments in the config file; the settings UI and CLI accept quoted command strings. Per-repository keys use absolute, resolved folder paths. Existing configs containing only `repositories` continue to work.
+`fetch_interval` is seconds (60-86400, default 300). `fetch_on_startup` defaults to true. `snoozed_until`, when present, is a Unix timestamp; the maximum supported timestamp represents an indefinite snooze. `notification_types` defaults to incoming commits and fetch errors enabled. Workday numbers run from 0 (Monday) to 6 (Sunday). Launcher commands are stored as arrays of arguments in the config file; the settings UI and CLI accept quoted command strings. Per-repository keys use absolute, resolved folder paths. Existing configs containing only `repositories` continue to work.
 
 Configuration is reread on every scan. The CLI supports `--config /path/to/config.json` before commands for separate repository lists; the installed bar always uses the default config. Notification and fetch state lives under `$XDG_STATE_HOME/gitful`, normally `~/.local/state/gitful`.
 
@@ -211,4 +221,4 @@ python3 -m unittest discover -s tests -v
 - `manifest.json`: Omarchy plugin registration.
 - `gitful`: launcher resolving its own directory.
 
-Tests use temporary local remotes to verify divergence, fast-forward pulls, refusal of unsafe pulls, fetch scheduling/failure, notification suppression/deduplication, worktrees, conflicts, stashes, and Git status edge cases. Launcher tests mock application spawning and verify argument/path handling. Preference tests cover inheritance, validation, and overnight work hours.
+Tests use temporary local remotes to verify divergence, fast-forward pulls, refusal of unsafe pulls, fetch scheduling/failure, notification suppression/deduplication, worktrees, conflicts, stashes, and Git status edge cases. Launcher tests mock application spawning and verify argument/path handling. Preference tests cover persistence, inheritance, application detection, safe test-command launching, notification types, startup fetching, validation, and overnight schedules.

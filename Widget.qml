@@ -19,6 +19,7 @@ Panel {
     readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.65)
     readonly property string fontFamily: Style.font.family
     property var repositories: []
+    property var applications: ({editor: [], files: [], agent: []})
     property string failure: ""
     property string message: ""
     property bool actionFailed: false
@@ -26,6 +27,7 @@ Panel {
     property string updated: "Waiting for first scan"
     property string query: ""
     property bool trackingOpen: false
+    property string openMenuPath: ""
     readonly property var selectedRepo: repositories.find(r => r.path === settingsPath) || null
     readonly property int selectedIndex: repositories.findIndex(r => r.path === settingsPath)
     property var preferences: ({})
@@ -54,10 +56,10 @@ Panel {
         return repo.dirty ? Color.accent : cleanColor;
     }
 
-    function refresh(fetch) {
+    function refresh(fetch, startup) {
         if (busy) return;
         refreshing = true;
-        scan.command = ["python3", helper, "monitor"].concat(fetch ? ["--fetch"] : []);
+        scan.command = ["python3", helper, "monitor"].concat(fetch ? ["--fetch"] : []).concat(startup ? ["--startup"] : []);
         scan.running = true;
     }
     function runAction(name, path, extra) {
@@ -74,12 +76,27 @@ Panel {
         runAction("move", path, [offset < 0 ? "before" : "after", neighbor.path]);
     }
     function showSettings(repo) {
+        openMenuPath = "";
         settingsPath = repo ? repo.path : "";
         settingsTitle = repo ? repo.name + " settings" : "Gitful settings";
         editingPreferences = repo ? (repo.settings || {}) : preferences;
         settingsOpen = true;
         trackingOpen = false;
         message = "";
+        if (!appScan.running) {
+            appScan.command = ["python3", helper, "applications"];
+            appScan.running = true;
+        }
+        Qt.callLater(function() { settingsForm.load(); });
+    }
+    function showRepositorySettings(repo) {
+        openMenuPath = "";
+        showSettings(repo);
+        open();
+        Qt.callLater(function() {
+            root.settingsOpen = true;
+            root.open();
+        });
     }
     function saveSettings(changes) {
         const extra = [JSON.stringify(changes)].concat(settingsPath ? ["--repo", settingsPath] : []);
@@ -111,7 +128,7 @@ Panel {
         if (repo.ahead && repo.behind) return "Diverged branches: reconcile in your Git client";
         return "Fetch and fast-forward this repository";
     }
-    Component.onCompleted: refresh(false)
+    Component.onCompleted: refresh(false, true)
     onOpenedChanged: if (opened) refresh(false)
     Timer { interval: 15000; running: true; repeat: true; onTriggered: root.refresh(false) }
     IpcHandler {
@@ -132,6 +149,7 @@ Panel {
                     const result = JSON.parse(text);
                     root.repositories = result.repositories;
                     root.preferences = result.preferences || {};
+                    root.applications = result.applications || root.applications;
                     root.failure = result.error || "";
                     root.updated = result.updated ? "Checked " + Qt.formatDateTime(new Date(result.updated), "HH:mm:ss") : "Scan failed";
                 } catch (e) { root.failure = "Could not read Gitful status. Check Python and Git."; }
@@ -143,6 +161,16 @@ Panel {
         }
     }
     Process {
+        id: appScan
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try { root.applications = JSON.parse(text).applications || root.applications; }
+                catch (e) { root.message = "Could not detect installed applications."; root.actionFailed = true; }
+            }
+        }
+    }
+    Process {
         id: action
         stdout: StdioCollector {
             waitForEnd: true
@@ -151,7 +179,10 @@ Panel {
                     const result = JSON.parse(text);
                     root.actionFailed = !result.ok;
                     root.message = result.error || result.message || "Done";
-                    if (result.ok && action.command[2] === "settings") root.editingPreferences = result.preferences;
+                    if (result.ok && action.command[2] === "settings") {
+                        root.editingPreferences = result.preferences;
+                        Qt.callLater(function() { settingsForm.markSaved(); });
+                    }
                     if (result.ok && action.command[2] === "launch") root.close();
                     if (result.ok && action.command[2] === "add") { root.trackingOpen = false; addPath.text = ""; }
                     if (result.ok && action.command[2] === "remove") root.settingsOpen = false;
@@ -202,7 +233,7 @@ Panel {
             id: catcher
             anchors.fill: parent
             focus: true
-            Keys.onEscapePressed: root.settingsOpen ? root.settingsOpen = false : root.trackingOpen ? root.trackingOpen = false : root.close()
+            Keys.onEscapePressed: root.openMenuPath !== "" ? root.openMenuPath = "" : root.settingsOpen ? root.settingsOpen = false : root.trackingOpen ? root.trackingOpen = false : root.close()
             Keys.onPressed: function(event) {
                 if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_K) {
                     searchField.forceActiveFocus();
@@ -224,15 +255,14 @@ Panel {
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 0
                         Label { text: root.settingsOpen ? root.settingsTitle : "Gitful"; font.bold: true; font.pixelSize: Style.space(20); elide: Text.ElideRight }
-                        Label { visible: !root.settingsOpen; text: root.repositories.length + " repositories · " + root.incoming + " incoming"; color: root.muted; font.pixelSize: Style.space(10) }
                     }
                     RowLayout {
                         id: headerActions
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: Style.space(8)
-                        ActionButton { visible: root.settingsOpen; text: "Back"; onClicked: root.settingsOpen = false }
-                        ActionButton { visible: root.settingsOpen; text: "Save"; enabled: !root.busy; onClicked: settingsForm.save() }
+                        ActionButton { visible: root.settingsOpen; text: "Cancel"; onClicked: root.settingsOpen = false }
+                        ActionButton { visible: root.settingsOpen; text: "Save"; enabled: !root.busy && settingsForm.dirty && settingsForm.valid; selected: settingsForm.dirty; onClicked: settingsForm.save() }
                         ActionButton { visible: !root.settingsOpen; text: "Track repository"; iconText: "󰐕"; selected: root.trackingOpen; onClicked: { root.trackingOpen = !root.trackingOpen; if (root.trackingOpen) addPath.forceActiveFocus(); } }
                         ActionButton { visible: !root.settingsOpen; iconText: "󰒓"; tooltipText: "Settings"; Accessible.name: "Settings"; onClicked: root.showSettings(null) }
                     }
@@ -240,6 +270,7 @@ Panel {
                 Rectangle {
                     visible: !root.settingsOpen
                     Layout.fillWidth: true
+                    Layout.topMargin: Style.space(5)
                     implicitHeight: Style.space(36)
                     radius: Style.space(6)
                     color: searchField.activeFocus ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.05) : "transparent"
@@ -263,7 +294,7 @@ Panel {
                         Label { text: "Ctrl K"; color: root.muted; font.pixelSize: Style.space(9) }
                     }
                 }
-                Label { visible: text !== ""; text: root.failure || root.message; color: root.failure || root.actionFailed ? Color.urgent : Color.accent; Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight }
+                Label { visible: !root.settingsOpen && text !== ""; text: root.failure || root.message; color: root.failure || root.actionFailed ? Color.urgent : Color.accent; Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight }
                 ListView {
                     id: list
                     visible: !root.settingsOpen
@@ -294,7 +325,7 @@ Panel {
                                     id: contextButton
                                     iconText: "󰇘"; tooltipText: "Repository options"; Accessible.name: "Options for " + row.modelData.name
                                     enabled: !root.busy; bordered: false
-                                    onClicked: contextMenu.open()
+                                    onClicked: root.openMenuPath = root.openMenuPath === row.modelData.path ? "" : row.modelData.path
                                 }
                             }
                             RowLayout {
@@ -334,6 +365,7 @@ Panel {
                                 Layout.fillWidth: true; spacing: Style.space(3)
                                 ActionButton { text: "IDE"; iconText: "󰆍"; bordered: false; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "editor"); tooltipText: "Open preferred editor" }
                                 ActionButton { text: "Files"; iconText: "󰉋"; bordered: false; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "files"); tooltipText: "Open file manager" }
+                                ActionButton { text: "Terminal"; iconText: ""; bordered: false; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "terminal"); tooltipText: "Open terminal in repository" }
                                 ActionButton { text: "Agent"; iconText: "󰚩"; bordered: false; enabled: !root.busy && !row.modelData.error; onClicked: root.launch(row.modelData, "agent"); tooltipText: "Start coding agent" }
                                 Item { Layout.fillWidth: true }
                                 ActionButton {
@@ -344,26 +376,46 @@ Panel {
                                 }
                             }
                         }
-                        Controls.Menu {
-                            id: contextMenu
-                            palette.window: Color.popups.background
-                            palette.windowText: root.foreground
-                            background: Rectangle {
-                                color: Color.popups.background; radius: Style.space(6)
-                                border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.22)
-                            }
-                            delegate: Controls.MenuItem {
-                                id: menuEntry
-                                contentItem: Label { text: menuEntry.text; color: menuEntry.enabled ? root.foreground : root.muted }
-                                background: Rectangle {
-                                    color: menuEntry.highlighted ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14) : "transparent"
-                                    radius: Style.space(3)
+                        Rectangle {
+                            id: repositoryMenu
+                            visible: root.openMenuPath === row.modelData.path
+                            z: 10
+                            width: Style.space(194)
+                            height: menuItems.implicitHeight + Style.space(12)
+                            x: row.width - width - Style.space(8)
+                            y: Style.space(6)
+                            radius: Style.space(6)
+                            color: Color.popups.background
+                            border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.24)
+
+                            ColumnLayout {
+                                id: menuItems
+                                anchors.fill: parent
+                                anchors.margins: Style.space(6)
+                                spacing: Style.space(2)
+                                ActionButton {
+                                    Layout.fillWidth: true
+                                    text: "Repository settings"
+                                    onClicked: root.showRepositorySettings(row.modelData)
+                                }
+                                ActionButton {
+                                    Layout.fillWidth: true
+                                    text: "Move up"
+                                    enabled: root.repositories.findIndex(repo => repo.path === row.modelData.path) > 0
+                                    onClicked: { root.openMenuPath = ""; root.moveRepository(row.modelData.path, -1); }
+                                }
+                                ActionButton {
+                                    Layout.fillWidth: true
+                                    text: "Move down"
+                                    enabled: root.repositories.findIndex(repo => repo.path === row.modelData.path) < root.repositories.length - 1
+                                    onClicked: { root.openMenuPath = ""; root.moveRepository(row.modelData.path, 1); }
+                                }
+                                ActionButton {
+                                    Layout.fillWidth: true
+                                    text: "Untrack repository"
+                                    onClicked: { root.openMenuPath = ""; root.runAction("remove", row.modelData.path); }
                                 }
                             }
-                            Controls.MenuItem { text: "Repository settings"; onTriggered: root.showSettings(row.modelData) }
-                            Controls.MenuItem { text: "Move up"; enabled: root.repositories.findIndex(repo => repo.path === row.modelData.path) > 0; onTriggered: root.moveRepository(row.modelData.path, -1) }
-                            Controls.MenuItem { text: "Move down"; enabled: root.repositories.findIndex(repo => repo.path === row.modelData.path) < root.repositories.length - 1; onTriggered: root.moveRepository(row.modelData.path, 1) }
-                            Controls.MenuItem { text: "Untrack repository"; onTriggered: root.runAction("remove", row.modelData.path) }
                         }
                     }
                     Label { anchors.centerIn: parent; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; visible: root.filtered.length === 0; text: root.repositories.length ? "No matching repositories" : "Add your first repository with + Track repository."; color: root.muted }
@@ -380,15 +432,23 @@ Panel {
                             visible: root.settingsPath !== ""
                             Layout.fillWidth: true
                             Label { text: root.settingsPath; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
-                            Label { text: root.selectedRepo ? root.fetchSummary(root.selectedRepo) + " · Notifications: " + (root.selectedRepo.notification_status || "On") : ""; color: root.muted; Layout.fillWidth: true; wrapMode: Text.Wrap }
                         }
                         SettingsForm {
                             id: settingsForm
                             Layout.fillWidth: true
                             preferences: root.editingPreferences
                             perRepository: root.settingsPath !== ""
+                            applications: root.applications
                             busy: root.busy
+                            feedback: root.message
+                            feedbackError: root.actionFailed
+                            onEdited: root.message = ""
                             onSaveRequested: function(changes) { root.saveSettings(changes); }
+                            onTestRequested: function(kind, command) {
+                                const extra = [command];
+                                if (root.settingsPath) extra.push("--repo", root.settingsPath);
+                                root.runAction("test-launch", kind, extra);
+                            }
                         }
                     }
                 }
@@ -405,17 +465,18 @@ Panel {
                         onAccepted: if (text.trim() && !root.busy) root.runAction("add", text.trim())
                         Keys.onEscapePressed: root.trackingOpen = false
                     }
-                    ActionButton { text: "Track"; enabled: !root.busy && addPath.text.trim() !== ""; onClicked: root.runAction("add", addPath.text.trim()) }
+                    ActionButton { text: "Add"; enabled: !root.busy && addPath.text.trim() !== ""; onClicked: root.runAction("add", addPath.text.trim()) }
                     ActionButton { text: "Cancel"; onClicked: root.trackingOpen = false }
                 }
                 RowLayout {
+                    visible: !root.settingsOpen
                     Layout.fillWidth: true
                     Layout.topMargin: Style.space(8)
                     spacing: Style.space(5)
                     Label { text: "●"; color: root.hasError ? Color.urgent : root.incoming ? Color.accent : root.cleanColor; font.pixelSize: Style.space(10) }
                     Label {
                         text: (root.refreshing ? "Checking repositories" : root.hasError ? "Fetch needs attention" : root.incoming ? root.incoming + " incoming commits" : "Up to date")
-                            + " · Last fetch " + (root.lastFetch ? Qt.formatDateTime(new Date(root.lastFetch * 1000), "HH:mm") : "—")
+                            + " · Last fetch " + (root.lastFetch ? Qt.formatDateTime(new Date(root.lastFetch * 1000), "HH:mm") : "-")
                             + " · Checks every " + Math.round((root.preferences.fetch_interval || 300) / 60) + "m"
                         color: root.hasError ? Color.urgent : root.muted; font.pixelSize: Style.space(9); Layout.fillWidth: true; elide: Text.ElideRight
                     }

@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import fcntl
 import hashlib
-import html
 import json
 import os
 from pathlib import Path
@@ -127,6 +126,60 @@ FETCH_INTERVAL = 300
 PLUGIN_ID = 'bpc0sta.gitful'
 STATE_HOME = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'gitful'
 WORK_HOURS = {'enabled': False, 'start': '09:00', 'end': '18:00', 'weekdays': [0, 1, 2, 3, 4]}
+NOTIFICATION_TYPES = {'incoming_commits': True, 'fetch_errors': True}
+SNOOZE_INDEFINITE = 253402300799
+
+
+def detect_applications():
+    """Return safe command candidates from PATH and desktop entries."""
+    candidates = {
+        'editor': ('code', 'codium', 'zed', 'subl', 'idea', 'pycharm', 'webstorm', 'emacs', 'nvim', 'vim'),
+        'files': ('thunar', 'dolphin', 'nautilus', 'nemo', 'pcmanfm', 'caja', 'yazi', 'ranger', 'lf'),
+        'agent': ('claude', 'codex', 'opencode', 'gemini', 'aider', 'amp', 'goose'),
+    }
+    found = {kind: {} for kind in candidates}
+    for kind, executables in candidates.items():
+        for executable in executables:
+            resolved = shutil.which(executable)
+            if resolved:
+                found[kind][executable] = {'name': executable, 'command': shlex.join([executable])}
+
+    data_dirs = [Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))]
+    data_dirs.extend(Path(p) for p in os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':') if p)
+    executable_kind = {exe: kind for kind, values in candidates.items() for exe in values}
+    for data_dir in data_dirs:
+        apps_dir = data_dir / 'applications'
+        if not apps_dir.is_dir():
+            continue
+        for desktop_file in apps_dir.rglob('*.desktop'):
+            try:
+                contents = desktop_file.read_text(errors='replace')
+                section = contents.split('[Desktop Entry]', 1)[1].split('\n[', 1)[0]
+                values = {}
+                for line in section.splitlines():
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        values[key] = value
+                if values.get('Type', 'Application') != 'Application' or values.get('NoDisplay') == 'true':
+                    continue
+                if any(word in values.get('Name', '').casefold() for word in ('bulk rename', 'uninstall', 'preferences', 'settings')):
+                    continue
+                raw_exec = values.get('Exec', '')
+                parts = shlex.split(raw_exec)
+                parts = [part for part in parts if not (part.startswith('%') and len(part) == 2)]
+                if not parts:
+                    continue
+                executable = Path(parts[0]).name
+                kind = executable_kind.get(executable)
+                if not kind or not shutil.which(parts[0]):
+                    continue
+                name = values.get('Name', executable)
+                current = found[kind].get(executable)
+                if current is None or current['name'] == executable:
+                    found[kind][executable] = {'name': name, 'command': shlex.join(parts)}
+            except (OSError, ValueError, IndexError):
+                continue
+    return {kind: sorted(entries.values(), key=lambda item: item['name'].casefold()) for kind, entries in found.items()}
 
 
 def validate_preferences(options, per_repo=False):
@@ -138,6 +191,14 @@ def validate_preferences(options, per_repo=False):
         value = options['fetch_interval']
         if type(value) is not int or not 60 <= value <= 86400:
             raise ValueError('fetch_interval must be an integer between 60 and 86400 seconds')
+    if 'fetch_on_startup' in options and not isinstance(options['fetch_on_startup'], bool):
+        raise ValueError('fetch_on_startup must be true or false')
+    if per_repo and 'fetch_on_startup' in options:
+        raise ValueError('fetch_on_startup is a global preference')
+    if 'notification_types' in options:
+        types = options['notification_types']
+        if not isinstance(types, dict) or set(types) - set(NOTIFICATION_TYPES) or not all(isinstance(value, bool) for value in types.values()):
+            raise ValueError('notification_types supports incoming_commits and fetch_errors booleans')
     if 'snoozed_until' in options:
         value = options['snoozed_until']
         if type(value) not in (int, float) or not 0 <= value <= 253402300799:
@@ -200,6 +261,8 @@ def notification_status(config, options, now):
         return 'Muted'
     until = max(config.get('snoozed_until', 0), options.get('snoozed_until', 0))
     if until > now:
+        if until >= SNOOZE_INDEFINITE:
+            return 'Snoozed indefinitely'
         return 'Snoozed until ' + datetime.fromtimestamp(until).strftime('%a %H:%M')
     if not work_hours_allow(config.get('work_hours', {}), now):
         return 'Outside work hours'
@@ -208,11 +271,16 @@ def notification_status(config, options, now):
 
 def preferences_view(config, path=None):
     options = repo_options(config, path) if path else config
+    types = {**NOTIFICATION_TYPES, **config.get('notification_types', {})}
+    if path:
+        types.update(options.get('notification_types', {}))
     return {
         'notifications': options.get('notifications', True),
         'snoozed_until': options.get('snoozed_until', 0),
         'fetch_interval': options.get('fetch_interval', config.get('fetch_interval', FETCH_INTERVAL)),
         'inherits_fetch_interval': bool(path) and 'fetch_interval' not in options,
+        'fetch_on_startup': config.get('fetch_on_startup', True),
+        'notification_types': types,
         'work_hours': {**WORK_HOURS, **config.get('work_hours', {})},
         'launchers': {key: shlex.join(options.get('launchers', {}).get(key, [])) for key in ('editor', 'files', 'agent')},
     }
@@ -228,9 +296,9 @@ def tracked_path(config, path):
 def update_preferences(config, changes, path=None):
     if not isinstance(changes, dict):
         raise ValueError('Preference changes must be a JSON object')
-    allowed = {'notifications', 'snoozed_until', 'snooze_minutes', 'fetch_interval', 'launchers'}
+    allowed = {'notifications', 'snoozed_until', 'snooze_minutes', 'fetch_interval', 'notification_types', 'launchers'}
     if not path:
-        allowed.add('work_hours')
+        allowed.update({'work_hours', 'fetch_on_startup'})
     if set(changes) - allowed:
         raise ValueError('Unknown preferences: ' + ', '.join(sorted(set(changes) - allowed)))
     changes = dict(changes)
@@ -271,6 +339,8 @@ def launch_repository(config, path, kind):
     path = tracked_path(config, path)
     if not Path(path).is_dir():
         raise ValueError('Repository folder is unavailable')
+    if kind not in ('editor', 'files', 'agent', 'terminal'):
+        raise ValueError('Unknown repository action')
     launchers = {**config.get('launchers', {}), **repo_options(config, path).get('launchers', {})}
     command = launchers.get(kind)
     if command is None:
@@ -278,6 +348,8 @@ def launch_repository(config, path, kind):
             command = ['omarchy', 'launch', 'editor', '{path}']
         elif kind == 'files':
             command = ['xdg-open', '{path}']
+        elif kind == 'terminal':
+            command = ['xdg-terminal-exec', '--dir=' + path]
         else:
             result = subprocess.run(['omarchy', 'default', 'agent'], capture_output=True, text=True, timeout=5)
             agent = result.stdout.strip()
@@ -290,13 +362,13 @@ def launch_repository(config, path, kind):
     command = [part.replace('{path}', path) for part in command]
     if kind == 'agent':
         command = ['xdg-terminal-exec', '--dir=' + path, *command]
-    elif not has_path:
+    elif not has_path and kind != 'terminal':
         command.append(path)
     if not shutil.which(command[0]):
         raise ValueError('Application not found: ' + command[0])
     subprocess.Popen(command, cwd=path, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, start_new_session=True)
-    return 'Opened ' + {'editor': 'editor', 'files': 'file manager', 'agent': 'coding agent'}[kind]
+    return 'Opened ' + {'editor': 'editor', 'files': 'file manager', 'agent': 'coding agent', 'terminal': 'terminal'}[kind]
 
 
 @contextmanager
@@ -324,12 +396,17 @@ def fetch_repo(path):
         git(path, 'fetch', '--quiet', '--', remote, timeout=45)
 
 
-def notify(row):
+def notify(row, kind):
     if not shutil.which('notify-send'):
         return False
-    body = html.escape(f"{row['name']} · {row['branch']}: {row['behind']} incoming commit(s). Open Gitful in the bar to pull.")
+    if kind == 'fetch_error':
+        title = 'Gitful - fetch failed'
+        body = f"{row['name']}: {row['fetch_error']}. Check the repository's remote connection."
+    else:
+        title = 'Gitful - incoming changes'
+        body = f"{row['name']} · {row['branch']}: {row['behind']} incoming commit(s). Open Gitful in the bar to pull."
     result = subprocess.run(['notify-send', '--app-name=Gitful', '--icon=git',
-                             'Gitful - incoming changes', body], timeout=10,
+                             title, body], timeout=10,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result.returncode == 0
 
@@ -352,28 +429,87 @@ def monitor_repo(path, previous, interval, force=False, config=None):
     row['settings'] = preferences_view(config, path)
     row['notification_status'] = notification_status(config, repo_options(config, path), now)
     row['stale'] = bool(row['upstream'] and (row['fetch_error'] or not row['fetched'] or now - row['fetched'] > interval * 2))
+    types = preferences_view(config, path)['notification_types']
     signature = [row['branch'], row['upstream'], row['incoming_revision']]
     if not row['error']:
-        if row['behind'] and signature != previous.get('notified') and row['notification_status'] == 'On':
+        if (row['behind'] and types['incoming_commits'] and signature != previous.get('notified')
+                and row['notification_status'] == 'On'):
             try:
-                if notify(row):
+                if notify(row, 'incoming'):
                     previous['notified'] = signature
             except (OSError, subprocess.TimeoutExpired):
                 pass
         elif row['behind'] == 0 or not row['upstream']:
             previous.pop('notified', None)
+        error_signature = row['fetch_error']
+        if error_signature and types['fetch_errors'] and error_signature != previous.get('notified_fetch_error') and row['notification_status'] == 'On':
+            try:
+                if notify(row, 'fetch_error'):
+                    previous['notified_fetch_error'] = error_signature
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        elif not error_signature:
+            previous.pop('notified_fetch_error', None)
     return row, previous
 
 
-def monitor(config, state_path, force=False):
+def monitor(config, state_path, force=False, startup=False):
     state = load_state(state_path)
     interval = max(60, int(config.get('fetch_interval', FETCH_INTERVAL)))
+    startup_fetch = startup and config.get('fetch_on_startup', True)
     paths = list(dict.fromkeys(config['repositories']))
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda p: monitor_repo(
-            p, state.get(p, {}), repo_options(config, p).get('fetch_interval', interval), force, config), paths))
+            p, state.get(p, {}), repo_options(config, p).get('fetch_interval', interval), force or startup_fetch, config), paths))
     save_config(state_path, {p: result[1] for p, result in zip(paths, results)})
     return [result[0] for result in results]
+
+
+def test_application(config, kind, raw_command='', path=None):
+    if kind not in ('editor', 'files', 'agent'):
+        raise ValueError('Unknown application type')
+    repo_override = bool(path)
+    if path:
+        path = tracked_path(config, path)
+    else:
+        path = str(Path(config['repositories'][0]).expanduser().resolve()) if config.get('repositories') else str(Path.home())
+    if not Path(path).is_dir():
+        raise ValueError('Test folder is unavailable')
+    if raw_command.strip():
+        try:
+            command = shlex.split(raw_command)
+        except ValueError as exc:
+            raise ValueError('Command syntax error: ' + str(exc)) from None
+        if not command:
+            raise ValueError('Enter an application command to test')
+    else:
+        inherited = repo_options(config, path).get('launchers', {}).get(kind) if repo_override else None
+        inherited = inherited or (config.get('launchers', {}).get(kind) if repo_override else None)
+        if inherited:
+            command = list(inherited)
+        elif kind == 'editor':
+            command = ['omarchy', 'launch', 'editor', '{path}']
+        elif kind == 'files':
+            command = ['xdg-open', '{path}']
+        else:
+            result = subprocess.run(['omarchy', 'default', 'agent'], capture_output=True, text=True, timeout=5)
+            agent = result.stdout.strip()
+            if result.returncode or not agent:
+                raise ValueError('Choose a coding agent in Omarchy defaults or enter a command first.')
+            command = [agent]
+    if not shutil.which(command[0]):
+        raise ValueError('Application not found: ' + command[0])
+    has_path = any('{path}' in part for part in command)
+    command = [part.replace('{path}', path) for part in command]
+    if kind == 'agent':
+        command = ['xdg-terminal-exec', '--dir=' + path, *command]
+    elif not has_path:
+        command.append(path)
+    if not shutil.which(command[0]):
+        raise ValueError('Application not found: ' + command[0])
+    subprocess.Popen(command, cwd=path, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    return 'Test command started successfully.'
 
 
 def pull_repo(path):
@@ -415,8 +551,10 @@ def main():
     parser.add_argument('--config', type=Path, default=DEFAULT_CONFIG)
     commands = parser.add_subparsers(dest='action', required=True)
     commands.add_parser('status', help='JSON status from local refs, without fetching')
+    commands.add_parser('applications', help='Detect installed application launchers')
     monitoring = commands.add_parser('monitor', help='Refresh upstreams when due and notify on new incoming commits')
     monitoring.add_argument('--fetch', action='store_true', help='Fetch now, ignoring the interval')
+    monitoring.add_argument('--startup', action='store_true', help='Fetch on startup when enabled')
     commands.add_parser('list', help='List tracked paths')
     for action in ('add', 'remove'):
         commands.add_parser(action).add_argument('paths', nargs='+')
@@ -427,7 +565,11 @@ def main():
     commands.add_parser('pull', help='Fetch and fast-forward a clean tracked repository').add_argument('path')
     launching = commands.add_parser('launch', help='Open a repository in an application')
     launching.add_argument('path')
-    launching.add_argument('kind', choices=('editor', 'files', 'agent'))
+    launching.add_argument('kind', choices=('editor', 'files', 'agent', 'terminal'))
+    testing = commands.add_parser('test-launch', help='Test an application command')
+    testing.add_argument('kind', choices=('editor', 'files', 'agent'))
+    testing.add_argument('command')
+    testing.add_argument('--repo')
     preferences = commands.add_parser('settings', help='View or update global or repository preferences')
     preferences.add_argument('--repo')
     preferences.add_argument('--set', dest='changes', help='JSON object with preference changes')
@@ -449,12 +591,14 @@ def main():
             config = read_config(args.config)
             if args.action in ('status', 'monitor'):
                 if args.action == 'monitor':
-                    rows = monitor(config, state_path, args.fetch)
+                    rows = monitor(config, state_path, args.fetch, args.startup)
                 else:
                     with ThreadPoolExecutor(max_workers=8) as pool:
                         rows = list(pool.map(status, config['repositories']))
                 print(json.dumps({'repositories': rows, 'preferences': preferences_view(config),
                                   'updated': datetime.now(timezone.utc).isoformat(), 'error': None}))
+            elif args.action == 'applications':
+                print(json.dumps({'applications': detect_applications()}))
             elif args.action == 'list':
                 print('\n'.join(config['repositories']))
             elif args.action == 'settings':
@@ -466,6 +610,8 @@ def main():
                                   'preferences': preferences_view(config, path)}))
             elif args.action == 'launch':
                 print(json.dumps({'ok': True, 'message': launch_repository(config, args.path, args.kind)}))
+            elif args.action == 'test-launch':
+                print(json.dumps({'ok': True, 'message': test_application(config, args.kind, args.command, args.repo)}))
             elif args.action == 'move':
                 move_repository(config, args.path, args.placement, args.target)
                 save_config(args.config, config)
@@ -490,7 +636,7 @@ def main():
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         if args.action in ('status', 'monitor'):
             print(json.dumps({'repositories': [], 'updated': None, 'error': str(exc)}))
-        elif args.action in ('pull', 'add', 'remove', 'move', 'settings', 'launch'):
+        elif args.action in ('pull', 'add', 'remove', 'move', 'settings', 'launch', 'test-launch'):
             print(json.dumps({'ok': False, 'error': str(exc)}))
         else:
             print(f'gitful: {exc}', file=sys.stderr)
