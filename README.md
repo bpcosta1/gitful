@@ -4,7 +4,9 @@
 
 Keep your repositories within reach. See changes, unpushed commits, incoming updates, stashes, and conflicts at a glance. Open a project in your preferred editor, file manager, or coding agent, pull incoming changes, and choose when to receive notifications. Built with Python and Quickshell, Gitful follows your system theme.
 
-![Gitful repository menu showing the branch, clean state, ahead/behind counts, repository ordering controls, and pull action](docs/images/gitful-panel.png)
+| Repositories | Settings |
+| --- | --- |
+| <img src="docs/images/gitful-panel.png" width="360" alt="Gitful repository menu with Git status and launch actions"> | <img src="docs/images/gitful-settings.png" width="360" alt="Gitful settings for notifications, fetch intervals, work hours, and preferred applications"> |
 
 Previously called GitPulse. The plugin ID (`bpc0sta.gitpulse`) and config/state paths retain `gitpulse` for compatibility. Use `./gitful` for the CLI; `./gitpulse` remains supported.
 
