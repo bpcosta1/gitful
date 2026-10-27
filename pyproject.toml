@@ -1,9 +1,21 @@
 [project]
 name = "gitful"
 version = "0.3.0"
-description = "Git status and development shortcuts for the Omarchy bar"
+description = "Git status and development shortcuts for Linux desktops"
 requires-python = ">=3.10"
 dependencies = []
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+
+[project.scripts]
+gitful = "gitful_core.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gitful_core*"]
 
 [tool.ruff]
 line-length = 120

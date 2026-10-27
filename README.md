@@ -1,8 +1,12 @@
 # Gitful
 
-**Git status and development shortcuts for your Omarchy bar.**
+**Git status and development shortcuts for Linux desktops.**
 
-Keep your repositories within reach. See changes, unpushed commits, incoming updates, stashes, and conflicts at a glance. Open a project in your preferred editor, file manager, or coding agent, pull incoming changes, and choose when to receive notifications. Built with Python and Quickshell, Gitful follows your system theme.
+Keep your repositories within reach. See changes, unpushed commits, incoming updates, stashes, and conflicts at a glance. Open a project in your preferred editor, file manager, or coding agent, pull incoming changes, and choose when to receive notifications. The Omarchy client uses Quickshell and follows your system theme. A GNOME Shell client is in development; see the [GNOME contributor handoff](gnome/README.md).
+
+Gitful has a shared Python CLI and desktop-specific clients. This README covers the Omarchy plugin. The [client contract](docs/client-contract.md) documents the CLI that another desktop client can use.
+
+Gitful is licensed under GPL-3.0-or-later; see [LICENSE](LICENSE).
 
 | Repositories | Settings |
 | --- | --- |
@@ -153,6 +157,8 @@ Run these commands from your source checkout, or from `~/.config/omarchy/plugins
 
 `open` and `toggle` control the installed bar widget. There is no separate popup process or daemon to start. Shell startup loads the enabled widget automatically.
 
+For use without Omarchy, install the shared CLI with `pipx install .` from a source checkout (or `python3 -m pip install .` in a virtual environment). The installed `gitful` command supports the shared repository, monitor, launcher, and settings commands above. `install`, `open`, and `toggle` belong to the Omarchy plugin entry point. The generic CLI requires an explicitly configured editor and coding agent when using those launch actions.
+
 ## Configuration
 
 `~/.config/gitful/config.json` (or `$XDG_CONFIG_HOME/gitful/config.json`):
@@ -215,10 +221,15 @@ python3 -m unittest discover -s tests -v
 ./gitful install
 ```
 
-- `gitful.py`: status collection, periodic fetches, notification deduplication, pull guards, CLI, installer.
+- `gitful_core/core.py`: status collection, periodic fetches, notification deduplication, preferences, and pull guards.
+- `gitful_core/cli.py`: installed command-line interface and versioned JSON responses.
+- `gitful_core/launchers.py`: desktop-specific launcher defaults.
+- `gitful_core/omarchy.py`: source installer for the Omarchy plugin.
+- `gitful.py`: compatibility entry point used by the Omarchy widget.
 - `Widget.qml`: native Omarchy bar icon and themed repository menu.
 - `SettingsForm.qml`: global and per-repository preferences UI.
 - `manifest.json`: Omarchy plugin registration.
 - `gitful`: launcher resolving its own directory.
+- `gnome/`: contributor handoff and future GNOME client.
 
 Tests use temporary local remotes to verify divergence, fast-forward pulls, refusal of unsafe pulls, fetch scheduling/failure, notification suppression/deduplication, worktrees, conflicts, stashes, and Git status edge cases. Launcher tests mock application spawning and verify argument/path handling. Preference tests cover persistence, inheritance, application detection, safe test-command launching, notification types, startup fetching, validation, and overnight schedules.

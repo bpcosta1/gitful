@@ -1,13 +1,10 @@
-import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('gitful', Path(__file__).resolve().parents[1] / 'gitful.py')
-gp = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(gp)
+from gitful_core import core as gp
 
 
 class StatusTests(unittest.TestCase):

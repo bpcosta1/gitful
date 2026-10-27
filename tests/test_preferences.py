@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import os
 from datetime import datetime
@@ -10,9 +9,7 @@ import unittest
 from unittest.mock import patch
 
 HELPER = Path(__file__).resolve().parents[1] / 'gitful.py'
-spec = importlib.util.spec_from_file_location('gitful_preferences', HELPER)
-gp = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(gp)
+from gitful_core import core as gp
 
 
 class PreferencesTests(unittest.TestCase):
@@ -157,7 +154,7 @@ class PreferencesTests(unittest.TestCase):
     @patch.object(gp.subprocess, 'Popen')
     def test_default_agent_and_per_repo_editor_override(self, popen, which):
         with patch.object(gp.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'codex\n', '')):
-            gp.launch_repository(self.config, self.path, 'agent')
+            gp.launch_repository(self.config, self.path, 'agent', platform='omarchy')
         self.assertEqual(popen.call_args.args[0], ['xdg-terminal-exec', '--dir=' + self.path, 'codex'])
         gp.update_preferences(self.config, {'launchers': {'editor': 'code'}})
         gp.update_preferences(self.config, {'launchers': {'editor': 'zed {path}'}}, self.path)
@@ -169,10 +166,10 @@ class PreferencesTests(unittest.TestCase):
     def test_missing_application_and_unconfigured_agent(self):
         with patch.object(gp.shutil, 'which', return_value=None):
             with self.assertRaisesRegex(ValueError, 'not found'):
-                gp.launch_repository(self.config, self.path, 'editor')
+                gp.launch_repository(self.config, self.path, 'editor', platform='omarchy')
         with patch.object(gp.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')):
             with self.assertRaisesRegex(ValueError, 'Choose a coding agent'):
-                gp.launch_repository(self.config, self.path, 'agent')
+                gp.launch_repository(self.config, self.path, 'agent', platform='omarchy')
 
 
 if __name__ == '__main__':
