@@ -216,6 +216,8 @@ CI status, failed GitHub Actions notifications, pull requests, and other hosting
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the fork and pull request workflow and client-specific guidance.
+
 ```sh
 python3 -m unittest discover -s tests -v
 ./gitful install
